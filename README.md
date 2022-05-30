@@ -1,0 +1,1 @@
+A tool for adding error correction code to files.
