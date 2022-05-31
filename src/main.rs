@@ -3,6 +3,7 @@ use labrador_ldpc::LDPCCode;
 use std::{
     fs::File,
     io::{stdin, stdout, Read, Write},
+    process::exit,
 };
 
 const LIMIT: usize = 512;
@@ -65,17 +66,26 @@ fn decode() {
     let mut data = vec![0u8; CODE.output_len()];
     let mut code = vec![0u8; CODE.n() / 8];
     stdin.read_exact(&mut code).unwrap();
-    CODE.decode_bf(&code, &mut data, &mut working, 200);
+    decode_data(&code, &mut data, &mut working);
     let file_size = usize::from_be_bytes(data[LIMIT - 8..LIMIT].try_into().unwrap());
+    eprintln!("size of original file: {file_size}");
     let count = num::Integer::div_ceil(&file_size, &LIMIT) - 1;
     for _ in 0..count {
         stdin.read_exact(&mut code).unwrap();
-        CODE.decode_bf(&code, &mut data, &mut working, 200);
+        decode_data(&code, &mut data, &mut working);
         stdout.write_all(&mut data[..LIMIT]).unwrap();
     }
     stdin.read_exact(&mut code).unwrap();
-    CODE.decode_bf(&code, &mut data, &mut working, 200);
+    decode_data(&code, &mut data, &mut working);
     stdout
         .write_all(&mut data[..file_size - LIMIT * count])
         .unwrap();
+}
+
+fn decode_data(input: &[u8], output: &mut [u8], working: &mut [u8]) {
+    let (success, _) = CODE.decode_bf(input, output, working, 200);
+    if !success {
+        eprintln!("decoding failed.");
+        exit(1);
+    }
 }
