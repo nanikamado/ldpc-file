@@ -62,30 +62,61 @@ fn encode(path: String) {
 fn decode() {
     let mut stdin = stdin();
     let mut stdout = stdout();
-    let mut working = vec![0u8; CODE.decode_bf_working_len()];
+    let mut working = vec![0i8; CODE.decode_ms_working_len()];
+    let mut working_u8 = vec![0u8; CODE.decode_ms_working_u8_len()];
+    let mut working_bf = vec![0u8; CODE.decode_bf_working_len()];
     let mut data = vec![0u8; CODE.output_len()];
     let mut code = vec![0u8; CODE.n() / 8];
     stdin.read_exact(&mut code).unwrap();
-    decode_data(&code, &mut data, &mut working);
+    decode_data(
+        &code,
+        &mut data,
+        &mut working_bf,
+        &mut working,
+        &mut working_u8,
+    );
     let file_size = usize::from_be_bytes(data[LIMIT - 8..LIMIT].try_into().unwrap());
     eprintln!("size of original file: {file_size}");
     let count = num::Integer::div_ceil(&file_size, &LIMIT) - 1;
     for _ in 0..count {
         stdin.read_exact(&mut code).unwrap();
-        decode_data(&code, &mut data, &mut working);
+        decode_data(
+            &code,
+            &mut data,
+            &mut working_bf,
+            &mut working,
+            &mut working_u8,
+        );
         stdout.write_all(&mut data[..LIMIT]).unwrap();
     }
     stdin.read_exact(&mut code).unwrap();
-    decode_data(&code, &mut data, &mut working);
+    decode_data(
+        &code,
+        &mut data,
+        &mut working_bf,
+        &mut working,
+        &mut working_u8,
+    );
     stdout
         .write_all(&mut data[..file_size - LIMIT * count])
         .unwrap();
 }
 
-fn decode_data(input: &[u8], output: &mut [u8], working: &mut [u8]) {
-    let (success, _) = CODE.decode_bf(input, output, working, 200);
+fn decode_data(
+    input: &[u8],
+    output: &mut [u8],
+    working_bf: &mut [u8],
+    working: &mut [i8],
+    working_u8: &mut [u8],
+) {
+    let (success, _) = CODE.decode_bf(input, output, working_bf, 1000);
     if !success {
-        eprintln!("decoding failed.");
-        exit(1);
+        let mut llrs = vec![0i8; CODE.n()];
+        CODE.hard_to_llrs(input, &mut llrs);
+        let (success, _) = CODE.decode_ms(&llrs, output, working, working_u8, 1000);
+        if !success {
+            eprintln!("decoding failed.");
+            exit(1);
+        }
     }
 }
