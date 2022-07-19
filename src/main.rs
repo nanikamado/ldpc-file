@@ -1,8 +1,9 @@
 use clap::{Parser, Subcommand};
+use dpc_pariter::IteratorExt;
 use labrador_ldpc::LDPCCode;
 use std::{
     fs::File,
-    io::{stdin, stdout, Read, Write},
+    io::{self, stdout, Read, Write},
     process::exit,
 };
 
@@ -60,7 +61,7 @@ fn encode(path: String) {
 }
 
 fn decode() {
-    let mut stdin = stdin();
+    let mut stdin = io::stdin();
     let mut stdout = stdout();
     let mut working = vec![0i8; CODE.decode_ms_working_len()];
     let mut working_u8 = vec![0u8; CODE.decode_ms_working_u8_len()];
@@ -78,17 +79,28 @@ fn decode() {
     let file_size = usize::from_be_bytes(data[LIMIT - 8..LIMIT].try_into().unwrap());
     eprintln!("size of original file: {file_size}");
     let count = num::Integer::div_ceil(&file_size, &LIMIT) - 1;
-    for _ in 0..count {
-        stdin.read_exact(&mut code).unwrap();
-        decode_data(
-            &code,
-            &mut data,
-            &mut working_bf,
-            &mut working,
-            &mut working_u8,
-        );
-        stdout.write_all(&mut data[..LIMIT]).unwrap();
-    }
+    (0..count)
+        .map(|_| {
+            let mut code = vec![0u8; CODE.n() / 8];
+            io::stdin().read_exact(&mut code).unwrap();
+            code
+        })
+        .parallel_map(|code| {
+            let mut data = vec![0u8; CODE.output_len()];
+            let mut working = vec![0i8; CODE.decode_ms_working_len()];
+            let mut working_u8 = vec![0u8; CODE.decode_ms_working_u8_len()];
+            let mut working_bf = vec![0u8; CODE.decode_bf_working_len()];
+            decode_data(
+                &code,
+                &mut data,
+                &mut working_bf,
+                &mut working,
+                &mut working_u8,
+            );
+            data
+        })
+        .for_each(|mut output| stdout.write_all(&mut output[..LIMIT]).unwrap());
+    for _ in 0..count {}
     stdin.read_exact(&mut code).unwrap();
     decode_data(
         &code,
